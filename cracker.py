@@ -1,6 +1,9 @@
 import zipfile
 import time
 import string
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
 
 class ZipCracker:
     def __init__(self, zip_path):
@@ -9,6 +12,8 @@ class ZipCracker:
         self.start_time = None
         self.stop_time = None
         self.elapsed_time = None
+        self.found_event = threading.Event()
+        self.password = None
 
     def validate_zip(self):
         try:
@@ -22,9 +27,16 @@ class ZipCracker:
             return False
     
     def attempt_password(self, password):
+        if self.found_event.is_set():
+            return False  
+        
+        if not self.zip_file:
+            return False
         try:
             print(f"Trying password: {password}")
             self.zip_file.extractall(pwd=password.encode('utf-8'))
+            self.password=password
+            self.found_event.set()
             return password
         except (RuntimeError, zipfile.BadZipFile):
             return False
@@ -68,7 +80,6 @@ class ZipCracker:
         for length in range(1, max_length + 1):
             print(f"Testing passwords of length {length}...")
             for password in self.generate_passwords_by_length(charset, length):
-                    print(f"Trying: {password}")
                     if self.attempt_password(password):
                         self.stop_time = time.time()  
                         elapsed_time = self.stop_time - self.start_time
@@ -79,7 +90,37 @@ class ZipCracker:
         return f"Couldn't find the password.\nTime taken: {elapsed_time:.2f} seconds"
     
     def iterative_brute_force_with_paralelism(self):
-        return None
+        charset = string.ascii_letters + string.digits
+        max_length = 10
+        self.start_time = time.time()
+
+        try:
+            with ThreadPoolExecutor(max_workers=800) as executor:
+                for length in range(1, max_length + 1):
+                    if self.found_event.is_set():  
+                        break
+
+                    print(f"Testing passwords of length {length}...")
+                    passwords = list(self.generate_passwords_by_length(charset, length))
+                    futures = {executor.submit(self.attempt_password, pwd): pwd for pwd in passwords}
+
+                    for future in futures:
+                        if self.found_event.is_set():  
+                            break
+                        try:
+                            results = future.result(timeout=0.1)  
+                            if results:
+                                self.stop_time = time.time()
+                                self.elapsed_time = self.stop_time - self.start_time
+                        except Exception:
+                            pass  
+        finally:
+            self.stop_time = time.time()
+            self.elapsed_time = self.stop_time - self.start_time
+            if self.password :
+                return f"Found it! The password is -> {self.password}\nTime taken: {self.elapsed_time:.2f} seconds"
+            return f"Couldn't find the password.\nTime taken: {self.elapsed_time:.2f} seconds"
+
     
 if __name__ == "__main__":
     path_to_zip = input("Enter the path to the archive you want to crack: ")
