@@ -14,6 +14,7 @@ class ZipCracker:
         self.elapsed_time = None
         self.found_event = threading.Event()
         self.password = None
+        self.charset = string.ascii_letters + string.digits
 
     def validate_zip(self):
         try:
@@ -30,8 +31,6 @@ class ZipCracker:
         if self.found_event.is_set():
             return False  
         
-        if not self.zip_file:
-            return False
         try:
             print(f"Trying password: {password}")
             self.zip_file.extractall(pwd=password.encode('utf-8'))
@@ -43,50 +42,46 @@ class ZipCracker:
     
     def dictionary_attack(self, dictionary_path="Cain_and_Abel_filtered.txt"):
             self.start_time = time.time()  
-
             try:
                 with open(dictionary_path, 'r') as input_file:
                     for line in input_file:
                         password = line.strip()
                         if self.attempt_password(password):
                             self.stop_time = time.time()  
-                            elapsed_time = self.stop_time - self.start_time
-                            return f"Found it! The password is -> {password}\nTime taken: {elapsed_time:.2f} seconds"
+                            self.elapsed_time = self.stop_time - self.start_time
+                            self.password=password
+                            return f"Found it! The password is -> {self.password}\nTime taken: {self.elapsed_time:.2f} seconds"
             except FileNotFoundError:
                 return f"Error: Dictionary file '{dictionary_path}' not found."
 
             self.stop_time = time.time()  
-            elapsed_time = self.stop_time-self.start_time
-            return f"Couldn't find the password in the dictionary.\nTime taken: {elapsed_time:.2f} seconds"
+            self.elapsed_time = self.stop_time-self.start_time
+            return f"Couldn't find the password in the dictionary.\nTime taken: {self.elapsed_time:.2f} seconds"
 
     def random_brute_force(self):
-        charset = string.ascii_letters + string.digits
         self.start_time = time.time()
 
         password_length = int(input("Enter the initial length of the password you want to try: "))
         last_prompt_time = time.time()
 
         def generate_random_password(length):
-            return ''.join(random.choice(charset) for _ in range(length))
+            return ''.join(random.choice(self.charset) for _ in range(length))
 
         print(f"Testing passwords of length {password_length}...")
         while True:  
             current_time = time.time()
             if current_time - last_prompt_time >= 15:
-                user_choice = input(
-                    "\n15 seconds have passed. Do you want to keep trying with the current password length, change the length, or stop? (keep/change/stop): "
-                ).strip().lower()
-
+                user_choice = input("\n15 seconds have passed. Do you want to keep trying with the current password length, change the length, or stop? (keep/change/stop): ").strip().lower()
                 if user_choice == 'change':
                     new_length = int(input("Enter the new length of the password you want to try: "))
                     password_length = new_length
                     last_prompt_time = time.time()
                     print(f"Changed to passwords of length {password_length}...")
                 elif user_choice == 'stop':
-                    print("Stopping the brute force attempt.")
+                    print("Stopping the brute force attempt...")
                     self.stop_time = time.time()
-                    elapsed_time = self.stop_time - self.start_time
-                    return f"Stopped by user. Time taken: {elapsed_time:.2f} seconds"
+                    self.elapsed_time = self.stop_time - self.start_time
+                    return f"Brute force attempt stopped. Time taken: {self.elapsed_time:.2f} seconds"
                 else:
                     last_prompt_time = time.time()
                     print("Continuing with current password length...")
@@ -94,8 +89,8 @@ class ZipCracker:
             password = generate_random_password(password_length)
             if self.attempt_password(password):
                 self.stop_time = time.time()
-                elapsed_time = self.stop_time - self.start_time
-                return f"Found it! The password is -> {password}\nTime taken: {elapsed_time:.2f} seconds"
+                self.elapsed_time = self.stop_time - self.start_time
+                return f"Found it! The password is -> {password}\nTime taken: {self.elapsed_time:.2f} seconds"
 
     def generate_passwords_by_length(self, charset, length):
         def recursive_generate(current_password, remaining_length):
@@ -108,35 +103,33 @@ class ZipCracker:
         return recursive_generate("", length)
     
     def iterative_brute_force(self):
-        charset = string.ascii_letters + string.digits
         max_length = 10  
         self.start_time = time.time()  
 
         for length in range(1, max_length + 1):
             print(f"Testing passwords of length {length}...")
-            for password in self.generate_passwords_by_length(charset, length):
+            for password in self.generate_passwords_by_length(self.charset, length):
                     if self.attempt_password(password):
                         self.stop_time = time.time()  
-                        elapsed_time = self.stop_time - self.start_time
-                        return f"Found it! The password is -> {password}\nTime taken: {elapsed_time:.2f} seconds"
+                        self.elapsed_time = self.stop_time - self.start_time
+                        return f"Found it! The password is -> {password}\nTime taken: {self.elapsed_time:.2f} seconds"
 
         self.stop_time = time.time()  
-        elapsed_time = self.stop_time-self.start_time
-        return f"Couldn't find the password.\nTime taken: {elapsed_time:.2f} seconds"
+        self.elapsed_time = self.stop_time-self.start_time
+        return f"Couldn't find the password.\nTime taken: {self.elapsed_time:.2f} seconds"
     
     def iterative_brute_force_with_paralelism(self):
-        charset = string.ascii_letters + string.digits
         max_length = 10
         self.start_time = time.time()
 
         try:
-            with ThreadPoolExecutor(max_workers=100) as executor:
+            with ThreadPoolExecutor(max_workers=800) as executor:
                 for length in range(1, max_length + 1):
                     if self.found_event.is_set():  
                         break
 
                     print(f"Testing passwords of length {length}...")
-                    passwords = list(self.generate_passwords_by_length(charset, length))
+                    passwords = list(self.generate_passwords_by_length(self.charset, length))
                     futures = {executor.submit(self.attempt_password, pwd): pwd for pwd in passwords}
 
                     for future in futures:
