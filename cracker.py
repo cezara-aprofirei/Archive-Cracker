@@ -1,9 +1,9 @@
 import zipfile
 import time
 import string
+import random
 from concurrent.futures import ThreadPoolExecutor
 import threading
-
 
 class ZipCracker:
     def __init__(self, zip_path):
@@ -60,7 +60,42 @@ class ZipCracker:
             return f"Couldn't find the password in the dictionary.\nTime taken: {elapsed_time:.2f} seconds"
 
     def random_brute_force(self):
-        return None
+        charset = string.ascii_letters + string.digits
+        self.start_time = time.time()
+
+        password_length = int(input("Enter the initial length of the password you want to try: "))
+        last_prompt_time = time.time()
+
+        def generate_random_password(length):
+            return ''.join(random.choice(charset) for _ in range(length))
+
+        print(f"Testing passwords of length {password_length}...")
+        while True:  
+            current_time = time.time()
+            if current_time - last_prompt_time >= 15:
+                user_choice = input(
+                    "\n15 seconds have passed. Do you want to keep trying with the current password length, change the length, or stop? (keep/change/stop): "
+                ).strip().lower()
+
+                if user_choice == 'change':
+                    new_length = int(input("Enter the new length of the password you want to try: "))
+                    password_length = new_length
+                    last_prompt_time = time.time()
+                    print(f"Changed to passwords of length {password_length}...")
+                elif user_choice == 'stop':
+                    print("Stopping the brute force attempt.")
+                    self.stop_time = time.time()
+                    elapsed_time = self.stop_time - self.start_time
+                    return f"Stopped by user. Time taken: {elapsed_time:.2f} seconds"
+                else:
+                    last_prompt_time = time.time()
+                    print("Continuing with current password length...")
+
+            password = generate_random_password(password_length)
+            if self.attempt_password(password):
+                self.stop_time = time.time()
+                elapsed_time = self.stop_time - self.start_time
+                return f"Found it! The password is -> {password}\nTime taken: {elapsed_time:.2f} seconds"
 
     def generate_passwords_by_length(self, charset, length):
         def recursive_generate(current_password, remaining_length):
@@ -95,7 +130,7 @@ class ZipCracker:
         self.start_time = time.time()
 
         try:
-            with ThreadPoolExecutor(max_workers=800) as executor:
+            with ThreadPoolExecutor(max_workers=100) as executor:
                 for length in range(1, max_length + 1):
                     if self.found_event.is_set():  
                         break
