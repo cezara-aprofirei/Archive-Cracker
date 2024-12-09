@@ -49,7 +49,6 @@ class ZipCracker:
                         if self.attempt_password(password):
                             self.stop_time = time.time()  
                             self.elapsed_time = self.stop_time - self.start_time
-                            self.password=password
                             return f"Found it! The password is -> {self.password}\nTime taken: {self.elapsed_time:.2f} seconds"
             except FileNotFoundError:
                 return f"Error: Dictionary file '{dictionary_path}' not found."
@@ -136,15 +135,17 @@ class ZipCracker:
                         if self.found_event.is_set():  
                             break
                         try:
-                            results = future.result(timeout=0.1)  
-                            if results:
+                            result = future.result()  
+                            if result:
                                 self.stop_time = time.time()
                                 self.elapsed_time = self.stop_time - self.start_time
-                        except Exception:
-                            pass  
+                                break
+                        except Exception as e:
+                            print(f"Error {e} occured")
         finally:
-            self.stop_time = time.time()
-            self.elapsed_time = self.stop_time - self.start_time
+            if not self.stop_time:
+                self.stop_time = time.time()
+                self.elapsed_time = self.stop_time - self.start_time
             if self.password :
                 return f"Found it! The password is -> {self.password}\nTime taken: {self.elapsed_time:.2f} seconds"
             return f"Couldn't find the password.\nTime taken: {self.elapsed_time:.2f} seconds"
